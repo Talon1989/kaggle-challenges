@@ -38,27 +38,28 @@ model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
 model.fit(basic_x_train, y)
 preds = model.predict(basic_x_test)
 output_1 = pd.DataFrame({'PassengerId': test_data.PassengerId, 'Survived': preds})
+output_1.to_csv('data/titanic/submission-1.csv', index=False)
 
 
-# BUILDING Y TARGET AND X
-y = train_data['Survived']
-train_data['Young'] = train_data['Age'] <= 35
-train_data = train_data.drop('Age', axis=1)
-test_data['Young'] = test_data['Age'] <= 35
-test_data = test_data.drop('Age', axis=1)
-# convert categorical column to dummy variables
-x_train = pd.get_dummies(train_data[relevant_features])
-x_train.drop('Sex_female', axis=1, inplace=True)
-x_test = pd.get_dummies(test_data[relevant_features])
-x_test.drop('Sex_female', axis=1, inplace=True)
-
-
-# RANDOM FOREST CLASSIFIER
-model = RandomForestClassifier(n_estimators=256, max_depth=8, random_state=42)
-model.fit(x_train, y)
-preds = model.predict(x_test)
-output_2 = pd.DataFrame({'PassengerId': test_data.PassengerId, 'Survived': preds})
-output_2.to_csv('data/titanic/submission-2.csv', index=False)
+# # BUILDING Y TARGET AND X
+# y = train_data['Survived']
+# train_data['Young'] = train_data['Age'] <= 35
+# train_data = train_data.drop('Age', axis=1)
+# test_data['Young'] = test_data['Age'] <= 35
+# test_data = test_data.drop('Age', axis=1)
+# # convert categorical column to dummy variables
+# x_train = pd.get_dummies(train_data[relevant_features])
+# x_train.drop('Sex_female', axis=1, inplace=True)
+# x_test = pd.get_dummies(test_data[relevant_features])
+# x_test.drop('Sex_female', axis=1, inplace=True)
+#
+#
+# # RANDOM FOREST CLASSIFIER
+# model = RandomForestClassifier(n_estimators=256, max_depth=8, random_state=42)
+# model.fit(x_train, y)
+# preds = model.predict(x_test)
+# output_2 = pd.DataFrame({'PassengerId': test_data.PassengerId, 'Survived': preds})
+# output_2.to_csv('data/titanic/submission-2.csv', index=False)
 
 
 
