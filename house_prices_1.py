@@ -10,7 +10,8 @@ For each Id in the test set, you must predict the value of the SalePrice variabl
 '''
 
 
-
+house_prices = pd.read_csv('data/house-prices/train.csv')
+house_prices_validation = pd.read_csv('data/house-prices/test.csv')
 
 
 
