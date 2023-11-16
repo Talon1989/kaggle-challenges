@@ -22,6 +22,15 @@ house_prices_validation = pd.read_csv('data/house-prices/test.csv')
 house_prices_total = [house_prices, house_prices_validation]
 
 
+# MAIN IDEAS  ----------------------------------------------------------------------------------
+
+
+'''
+one-hot encoding:  pd.get_dummies(DataFrame, column_name)
+label encoder:  DataFrame[col_name] = LabelEncoder().fit_transform(DataFrame[col_name]) 
+'''
+
+
 # DATA PREPROCESSING  -----------------------------------------------------------------------------------
 
 
@@ -29,9 +38,8 @@ alleys = ['None', 'Grvl', 'Pave']
 
 
 for df in house_prices_total:
-    # df.drop('Alley', axis=1, inplace=True)  # too many nan
-    # df.drop('LotFrontage', axis=1, inplace=True)  # consider not dropping this
     df['Alley'].fillna('None', inplace=True)
+    df['MiscFeature'].fillna('None', inplace=True)
 
 # alley_encoder = LabelEncoder()
 # alley_encoder.fit(alleys)
@@ -71,10 +79,33 @@ validation_missing_data = house_prices_validation.isna().sum(axis=0)
 
 mean_lot_area = house_prices['LotArea'].mean()
 house_prices['LotArea'].fillna(mean_lot_area)
+house_prices.drop(np.where(house_prices['Electrical'].isna())[0], axis=0, inplace=True)  # eliminating nan row
 
 
+def categorical_data_analysis():
+    categorical_columns = [
+        'MSZoning', 'Street', 'LotShape', 'LandContour', 'Utilities', 'LotConfig', 'LandSlope', 'Neighborhood',
+        'Condition1', 'Condition2', 'BldgType', 'HouseStyle', 'RoofStyle', 'Exterior1st', 'ExterQual', 'ExterCond',
+        'Foundation', 'Heating', 'CentralAir', 'Electrical', 'KitchenQual', 'Functional', 'SaleType', 'SaleCondition'
+    ]
+    index_of_nan = np.where(house_prices['Electrical'].isna())[0]
+    house_prices.drop(index_of_nan, axis=0, inplace=True)
+    for c in categorical_columns:
+        print(c)
+        print(np.unique(house_prices[c]))
+        print()
 
 
+# DEALING WITH GARAGE: keep only GarageCars representative of 'garage' feature
+# AND FIREPLACE
 
+garage_features = ['GarageType', 'GarageYrBlt', 'GarageFinish', 'GarageCars', 'GarageArea', 'GarageQual', 'GarageCond']
+features_to_drop = [feat for feat in garage_features if feat != 'GarageCars']
+for df in house_prices_total:
+    df.drop(features_to_drop, axis=1, inplace=True)
+    df.drop('FireplaceQu', axis=1, inplace=True)
+
+
+# DEALING WITH PORCH AND POOL
 
 
