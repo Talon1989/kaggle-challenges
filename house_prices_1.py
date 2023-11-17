@@ -104,8 +104,131 @@ features_to_drop = [feat for feat in garage_features if feat != 'GarageCars']
 for df in house_prices_total:
     df.drop(features_to_drop, axis=1, inplace=True)
     df.drop('FireplaceQu', axis=1, inplace=True)
+    df.drop('PoolQC', axis=1, inplace=True)
+    df.drop('MoSold', axis=1, inplace=True)
 
 
-# DEALING WITH PORCH AND POOL
+# DEALING WITH PORCH
+
+# using training data mean values also for validation
+open_porch_mean = house_prices['OpenPorchSF'].mean()
+enclosed_porch_mean = house_prices['EnclosedPorch'].mean()
+porch_means = [open_porch_mean, enclosed_porch_mean]
+porch_types = ['OpenPorchSF', 'EnclosedPorch']
+
+for i in range(len(porch_types)):
+    for df in house_prices_total:
+        no_indices = df[df[porch_types[i]] == 0].index
+        small_indices = df[(0 < df[porch_types[i]]) & (df[porch_types[i]] < porch_means[i])].index
+        big_indices = df[df[porch_types[i]] >= open_porch_mean].index
+        df.loc[no_indices, porch_types[i]] = 'Zero'
+        df.loc[small_indices, porch_types[i]] = 'Small'
+        df.loc[big_indices, porch_types[i]] = 'Big'
+
+for porch in ['3SsnPorch', 'ScreenPorch']:
+    for df in house_prices_total:
+        non_zero_indices = df[df[porch] != 0].index
+        df.loc[non_zero_indices, porch] = 1
+
+# SIMPLIFYING POOL
+for df in house_prices_total:
+    pool_non_zero_indices = df[df['PoolArea'] != 0].index
+    # df.drop(columns=['PoolArea'])  # dropping 'PoolArea' and creating boolean 'Pool' with values based on indices
+    # df['Pool'] = 0
+    # df.loc[non_zero_indices, 'Pool'] = 1
+    df.loc[pool_non_zero_indices, 'PoolArea'] = 1  # replacing values and renaming
+    df.rename(columns={'PoolArea': 'Pool'}, inplace=True)
+
+# SIMPLIFYING FENCE
+for df in house_prices_total:
+    no_fence_indices = df[df['Fence'].isna()].index
+    yes_fence_indices = df[df['Fence'].isna() == False].index
+    df.loc[no_fence_indices, 'Fence'] = 0
+    df.loc[yes_fence_indices, 'Fence'] = 1
+
+
+# no_open_porch_indices = house_prices[house_prices['OpenPorchSF'] == 0].index
+# small_open_porch_indices = house_prices[(0 < house_prices['OpenPorchSF']) & (house_prices['OpenPorchSF'] < open_porch_mean)].index
+# big_open_porch_indices = house_prices[house_prices['OpenPorchSF'] >= open_porch_mean].index
+# house_prices.loc[no_open_porch_indices, 'OpenPorchSF'] = 'Zero'
+# house_prices.loc[small_open_porch_indices, 'OpenPorchSF'] = 'Small'
+# house_prices.loc[big_open_porch_indices, 'OpenPorchSF'] = 'Big'
+
+
+# check two lists contain no common elements
+# print(set(small_open_porch_indices).isdisjoint(set(big_open_porch_indices)))
+
+
+# TODO UTILITIES boolean, LandSlope categorical, consider uniting conditions and forward
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
