@@ -103,9 +103,16 @@ garage_features = ['GarageType', 'GarageYrBlt', 'GarageFinish', 'GarageCars', 'G
 features_to_drop = [feat for feat in garage_features if feat != 'GarageCars']
 for df in house_prices_total:
     df.drop(features_to_drop, axis=1, inplace=True)
-    df.drop('FireplaceQu', axis=1, inplace=True)
-    df.drop('PoolQC', axis=1, inplace=True)
-    df.drop('MoSold', axis=1, inplace=True)
+    df.drop('FireplaceQu', axis=1, inplace=True)  # already have similar data
+    df.drop('PoolQC', axis=1, inplace=True)  # too specific for too few elements
+    df.drop('MoSold', axis=1, inplace=True)  # useless feature
+    df.drop('Utilities', axis=1, inplace=True)  # all utilities in validation
+    df.drop('Condition1', axis=1, inplace=True)  # non significant
+    df.drop('Condition2', axis=1, inplace=True)  # non significant
+    df.drop('BldgType', axis=1, inplace=True)  # non significant
+    df.drop('HouseStyle', axis=1, inplace=True)  # CONSIDER implementing it
+    df.drop('OverallCond', axis=1, inplace=True)  # OverallQual is too similar
+    df.drop('YearBuilt', axis=1, inplace=True)  # Keep only YearRemodAdd
 
 
 # DEALING WITH PORCH
@@ -121,6 +128,7 @@ for i in range(len(porch_types)):
         no_indices = df[df[porch_types[i]] == 0].index
         small_indices = df[(0 < df[porch_types[i]]) & (df[porch_types[i]] < porch_means[i])].index
         big_indices = df[df[porch_types[i]] >= open_porch_mean].index
+        df[porch_types[i]] = pd.Categorical(df[porch_types[i]], categories=['Zero', 'Small', 'Big'])
         df.loc[no_indices, porch_types[i]] = 'Zero'
         df.loc[small_indices, porch_types[i]] = 'Small'
         df.loc[big_indices, porch_types[i]] = 'Big'
@@ -159,18 +167,55 @@ for df in house_prices_total:
 # print(set(small_open_porch_indices).isdisjoint(set(big_open_porch_indices)))
 
 
-# TODO UTILITIES boolean, LandSlope categorical, consider uniting conditions and forward
+# CATEGORICAL PREPROCESSING
+# h = pd.get_dummies(house_prices, columns=['MSZoning, LotShape', 'LotConfig', 'LandSlope'])
+categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', 'LandSlope', 'LandContour']
+
+# validation data has no Industrial, Commercial or Agricultural zoning classification (MSZoning)
+# join all residential together (non-floating village)
+house_prices_validation['MSZoning'].fillna('RL', inplace=True)
+for df in house_prices_total:
+    df.loc[df['MSZoning'].str.startswith('R'), 'MSZoning'] = 'Res'
+    df.loc[df['MSZoning'].str.startswith('F'), 'MSZoning'] = 'Fl'
+    df.loc[df['MSZoning'].str.startswith('C'), 'MSZoning'] = 'Comm'
 
 
+# LotShape: join all irregular 2 and 3 together
+for df in house_prices_total:
+    df.loc[df['LotShape'] == 'IR3', 'LotShape'] = 'IR2'
 
 
+# Consider LandContour: join non-levelled properties together
+# for df in house_prices_total:
+#     df.loc[df['LandContour'] != 'Lvl', 'LandContour'] = 'Non-Lvl'
 
 
+# OverallQual and OverallCond are extemely positively correlated, so we just use one and simplify the data
+# corr = house_prices[['OverallQual', 'OverallCond']].corr()
+for df in house_prices_total:
+    low_indices = df[df['OverallQual'] <= 4].index
+    medium_indices = df[(5 <= df['OverallQual']) & (df['OverallQual'] <= 7)].index
+    high_indices = df[df['OverallQual'] >= 8].index
+    df['OverallQual'] = pd.Categorical(df['OverallQual'], categories=['Low', 'Medium', 'High'])
+    df.loc[low_indices, 'OverallQual'] = 'Low'
+    df.loc[medium_indices, 'OverallQual'] = 'Medium'
+    df.loc[high_indices, 'OverallQual'] = 'High'
+
+for df in house_prices_total:
+    pre_war_indices = df[df['YearRemodAdd'] <= 1945].index
+    old_indices = df[(df['YearRemodAdd'] >= 1946) & (df['YearRemodAdd'] <= 1975)].index
+    recent_indices = df[(df['YearRemodAdd'] >= 1976) & (df['YearRemodAdd'] <= 1999)].index
+    modern_indices = df[df['YearRemodAdd'] >= 2000].index
+    df.rename(columns={'YearRemodAdd': 'Year'}, inplace=True)
+    df['Year'] = pd.Categorical(df['Year'], categories=['Pre-War', 'Old', 'Recent', 'Modern'])
+    df.loc[pre_war_indices, 'Year'] = 'Pre-War'
+    df.loc[old_indices, 'Year'] = 'Old'
+    df.loc[recent_indices, 'Year'] = 'Recent'
+    df.loc[modern_indices, 'Year'] = 'Modern'
 
 
-
-
-
+# TODO: roof style >
+# TODO: deal with Neighborhood, check rich places and poor places and split data
 
 
 
