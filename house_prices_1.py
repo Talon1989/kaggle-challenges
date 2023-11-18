@@ -218,8 +218,11 @@ for df in house_prices_total:
 # TODO: deal with Neighborhood, check rich places and poor places and split data
 
 
-
-
+rich = ['Edwards', 'CollgCr', 'Blueste', 'NAmes', 'NoRidge', 'NridgHt', 'NWAmes']
+medium = ['Blmngtn', 'BrDale', 'OldTown', 'Brookside', 'Crawfor', 'Gilbert', 'MeadowV', 'NPkVill', 'OldTown']
+poor = ['Mitchel', ]
+river = ['ClearCr',]
+iowa_road = ['IDOTRR']
 
 
 
