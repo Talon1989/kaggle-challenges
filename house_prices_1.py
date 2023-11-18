@@ -113,6 +113,20 @@ for df in house_prices_total:
     df.drop('HouseStyle', axis=1, inplace=True)  # CONSIDER implementing it
     df.drop('OverallCond', axis=1, inplace=True)  # OverallQual is too similar
     df.drop('YearBuilt', axis=1, inplace=True)  # Keep only YearRemodAdd
+    df.drop('RoofMatl', axis=1, inplace=True)  # few data in validation
+    df.drop('Exterior1st', axis=1, inplace=True)
+    df.drop('Exterior2nd', axis=1, inplace=True)
+    df.drop('MasVnrType', axis=1, inplace=True)  # non significant
+    df.drop('ExterCond', axis=1, inplace=True)  # non significant
+    df.drop('BsmtQual', axis=1, inplace=True)  # non significant
+    df.drop('BsmtExposure', axis=1, inplace=True)  # non significant
+    df.drop('BsmtFinType1', axis=1, inplace=True)  # non significant
+    df.drop('BsmtFinSF1', axis=1, inplace=True)  # non significant
+    df.drop('BsmtFinType2', axis=1, inplace=True)  # non significant
+    df.drop('BsmtFinSF2', axis=1, inplace=True)  # non significant
+    df.drop('BsmtUnfSF', axis=1, inplace=True)  # non significant
+    df.drop('TotalBsmtSF', axis=1, inplace=True)  # non significant
+    df.drop('Heating', axis=1, inplace=True)  # non significant
 
 
 # DEALING WITH PORCH
@@ -214,29 +228,36 @@ for df in house_prices_total:
     df.loc[modern_indices, 'Year'] = 'Modern'
 
 
-# TODO: roof style >
-# TODO: deal with Neighborhood, check rich places and poor places and split data
-
-
-rich = ['Edwards', 'CollgCr', 'Blueste', 'NAmes', 'NoRidge', 'NridgHt', 'NWAmes']
-medium = ['Blmngtn', 'BrDale', 'OldTown', 'Brookside', 'Crawfor', 'Gilbert', 'MeadowV', 'NPkVill', 'OldTown']
-poor = ['Mitchel', ]
-river = ['ClearCr',]
+above_avg = ['Edwards', 'CollgCr', 'Blueste', 'NAmes', 'NoRidge',
+        'NridgHt', 'NWAmes', 'Somerst', 'StoneBr', 'Timber', 'Veenker']
+less_avg = ['Blmngtn', 'BrDale', 'OldTown', 'Crawfor', 'Mitchel', 'BrkSide',
+          'Gilbert', 'MeadowV', 'NPkVill', 'OldTown', 'SWISU', 'Sawyer', 'SawyerW']
+river = ['ClearCr']
 iowa_road = ['IDOTRR']
 
+indices = house_prices.loc[house_prices['Neighborhood'].isin(above_avg)].index
+
+for df in house_prices_total:
+    df.loc[df['Neighborhood'].isin(above_avg), 'Neighborhood'] = 'Rich'
+    df.loc[df['Neighborhood'].isin(less_avg), 'Neighborhood'] = 'Medium'
+    df.loc[df['Neighborhood'].isin(river), 'Neighborhood'] = 'River'
+    df.loc[df['Neighborhood'].isin(iowa_road), 'Neighborhood'] = 'Road'
 
 
+# dealing with basement, remove all conditions and quality, just boolean True or False
+for df in house_prices_total:
+    non_nan_indices = df[df['BsmtCond'].notna()].index
+    df.loc[non_nan_indices, 'BsmtCond'] = 'Y'
+    df['BsmtCond'].fillna('N', inplace=True)
+    df.rename(columns={'BsmtCond': 'Basement'}, inplace=True)
 
 
+# join fuse types of Electrical together
+for df in house_prices_total:
+    df.loc[df['Electrical'].str.startswith('F'), 'Electrical'] = 'Fuse'
 
 
-
-
-
-
-
-
-
+# TODO: 1stFlrSF ->
 
 
 
