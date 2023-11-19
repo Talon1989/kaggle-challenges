@@ -40,6 +40,9 @@ alleys = ['None', 'Grvl', 'Pave']
 for df in house_prices_total:
     df['Alley'].fillna('None', inplace=True)
     df['MiscFeature'].fillna('None', inplace=True)
+    df.rename(columns={
+        'BedroomAbvGr': 'Bedroom',
+        'KitchenAbvGr': 'Kitchen'}, inplace=True)
 
 # alley_encoder = LabelEncoder()
 # alley_encoder.fit(alleys)
@@ -103,6 +106,7 @@ garage_features = ['GarageType', 'GarageYrBlt', 'GarageFinish', 'GarageCars', 'G
 features_to_drop = [feat for feat in garage_features if feat != 'GarageCars']
 for df in house_prices_total:
     df.drop(features_to_drop, axis=1, inplace=True)
+    df.drop('Id', axis=1, inplace=True)
     df.drop('FireplaceQu', axis=1, inplace=True)  # already have similar data
     df.drop('PoolQC', axis=1, inplace=True)  # too specific for too few elements
     df.drop('MoSold', axis=1, inplace=True)  # useless feature
@@ -127,6 +131,12 @@ for df in house_prices_total:
     df.drop('BsmtUnfSF', axis=1, inplace=True)  # non significant
     df.drop('TotalBsmtSF', axis=1, inplace=True)  # non significant
     df.drop('Heating', axis=1, inplace=True)  # non significant
+    df.drop('LowQualFinSF', axis=1, inplace=True)  # non significant
+    df.drop('PavedDrive', axis=1, inplace=True)  # non significant
+    df.drop('MiscVal', axis=1, inplace=True)  # non significant
+    df.drop('YrSold', axis=1, inplace=True)  # non significant
+    df.drop('SaleType', axis=1, inplace=True)  # non significant
+    df.drop('MSSubClass', axis=1, inplace=True)  # non significant
 
 
 # DEALING WITH PORCH
@@ -180,10 +190,6 @@ for df in house_prices_total:
 # check two lists contain no common elements
 # print(set(small_open_porch_indices).isdisjoint(set(big_open_porch_indices)))
 
-
-# CATEGORICAL PREPROCESSING
-# h = pd.get_dummies(house_prices, columns=['MSZoning, LotShape', 'LotConfig', 'LandSlope'])
-categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', 'LandSlope', 'LandContour']
 
 # validation data has no Industrial, Commercial or Agricultural zoning classification (MSZoning)
 # join all residential together (non-floating village)
@@ -257,16 +263,49 @@ for df in house_prices_total:
     df.loc[df['Electrical'].str.startswith('F'), 'Electrical'] = 'Fuse'
 
 
-# TODO: 1stFlrSF ->
+# dealing with nan
+for df in house_prices_total:
+    df['BsmtFullBath'].fillna(0, inplace=True)
+    df['BsmtHalfBath'].fillna(0, inplace=True)
+    df['KitchenQual'].fillna('TA', inplace=True)
+    df['Functional'].fillna('Typ', inplace=True)
 
 
+# joining functional together
+for df in house_prices_total:
+    df.loc[df['Functional'].str.startswith('Mi'), 'Functional'] = 'Min'
+    df.loc[df['Functional'].str.startswith('Mo'), 'Functional'] = 'Mod'
+    df.loc[df['Functional'].str.startswith('Ma'), 'Functional'] = 'Mod'
+    df.loc[df['Functional'].str.startswith('S'), 'Functional'] = 'Sev'
 
 
+# turning wood deck sq into categorical
+for df in house_prices_total:
+    no_indices = df[df['WoodDeckSF'] == 0].index
+    small_indices = df[(0 < df['WoodDeckSF']) & (df['WoodDeckSF'] <= 250)].index
+    big_indices = df[df['WoodDeckSF'] > 250].index
+    df['WoodDeckSF'] = pd.Categorical(df['WoodDeckSF'], categories=['Zero', 'Small', 'Big'])
+    df.loc[no_indices, 'WoodDeckSF'] = 'Zero'
+    df.loc[small_indices, 'WoodDeckSF'] = 'Small'
+    df.loc[big_indices, 'WoodDeckSF'] = 'Big'
 
 
+# only tennis court in training dataset and no tennis court in validation
+tennis_court_index = house_prices[house_prices['MiscFeature'] == 'TenC'].index
+house_prices.drop(tennis_court_index, inplace=True)
 
 
+# ONE-HOT
 
+
+categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', 'LandContour',
+                       'LandSlope', 'Neighborhood', 'OverallQual', 'Year', 'RoofStyle', 'EterQual',
+                       'Foundation', 'Basement', 'HeatingQC', 'CentralAir', 'Electrical',
+                       'BsmtFullBath', 'BsmtHalfBath', 'FullBath', 'HalfBath', 'Bedroom',
+                       'Kitchen', 'KitchenQual', 'Functional', 'Fireplaces', 'GarageCars',
+                       'WoodDeckSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'Pool',
+                       'Fence', 'MiscFeature', 'SaleCondition'
+                       ]
 
 
 
