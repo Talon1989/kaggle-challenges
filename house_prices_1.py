@@ -299,20 +299,19 @@ house_prices.drop(tennis_court_index, inplace=True)
 
 
 categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', 'LandContour',
-                       'LandSlope', 'Neighborhood', 'OverallQual', 'Year', 'RoofStyle', 'EterQual',
+                       'LandSlope', 'Neighborhood', 'OverallQual', 'Year', 'RoofStyle', 'ExterQual',
                        'Foundation', 'Basement', 'HeatingQC', 'CentralAir', 'Electrical',
                        'BsmtFullBath', 'BsmtHalfBath', 'FullBath', 'HalfBath', 'Bedroom',
                        'Kitchen', 'KitchenQual', 'Functional', 'Fireplaces', 'GarageCars',
                        'WoodDeckSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'Pool',
-                       'Fence', 'MiscFeature', 'SaleCondition'
-                       ]
+                       'Fence', 'MiscFeature', 'SaleCondition']
 
 
+house_prices = pd.get_dummies(house_prices, columns=categorical_columns)
+house_prices_validation = pd.get_dummies(house_prices_validation, columns=categorical_columns)
 
-
-
-
-
+X_, y_ = house_prices.drop('SalePrice', axis=1), house_prices['SalePrice']
+X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=7/10)
 
 
 
