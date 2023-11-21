@@ -4,10 +4,10 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 import pandas as pd
+from sklearn.metrics import r2_score
 
 
 '''
@@ -120,7 +120,8 @@ for df in house_prices_total:
     df.drop('RoofMatl', axis=1, inplace=True)  # few data in validation
     df.drop('Exterior1st', axis=1, inplace=True)
     df.drop('Exterior2nd', axis=1, inplace=True)
-    df.drop('MasVnrType', axis=1, inplace=True)  # non significant
+    df.drop('MasVnrType', axis=1, inplace=True)  # too many missing data
+    df.drop('MasVnrArea', axis=1, inplace=True)  # too many missing data
     df.drop('ExterCond', axis=1, inplace=True)  # non significant
     df.drop('BsmtQual', axis=1, inplace=True)  # non significant
     df.drop('BsmtExposure', axis=1, inplace=True)  # non significant
@@ -290,6 +291,9 @@ for df in house_prices_total:
     df.loc[big_indices, 'WoodDeckSF'] = 'Big'
 
 
+# replace nan of MasVnrArea with 'No'
+
+
 # only tennis court in training dataset and no tennis court in validation
 tennis_court_index = house_prices[house_prices['MiscFeature'] == 'TenC'].index
 house_prices.drop(tennis_court_index, inplace=True)
@@ -304,7 +308,7 @@ categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', '
                        'BsmtFullBath', 'BsmtHalfBath', 'FullBath', 'HalfBath', 'Bedroom',
                        'Kitchen', 'KitchenQual', 'Functional', 'Fireplaces', 'GarageCars',
                        'WoodDeckSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'Pool',
-                       'Fence', 'MiscFeature', 'SaleCondition']
+                       'Fence', 'MiscFeature', 'SaleCondition', 'OpenPorchSF']
 
 
 house_prices = pd.get_dummies(house_prices, columns=categorical_columns)
@@ -314,25 +318,75 @@ X_, y_ = house_prices.drop('SalePrice', axis=1), house_prices['SalePrice']
 X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=7/10)
 
 
+# TESTING MODELS -----------------------------------------------------------------------------
 
 
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.svm import SVR
 
 
+# random_forest_model = RandomForestRegressor()
+# random_forest_model.fit(X_train, y_train)
+# predictions = random_forest_model.predict(X_test)
+# print('Random Forest R2 score on predictions: %.4f' % r2_score(y_test, predictions))
+#
+#
+# gradient_boosting_model = GradientBoostingRegressor()
+# gradient_boosting_model.fit(X_train, y_train)
+# predictions = gradient_boosting_model.predict(X_test)
+# print('Gradient Boosting R2 score on predictions: %.4f' % r2_score(y_test, predictions))
+#
+#
+# ada_model = AdaBoostRegressor()
+# ada_model.fit(X_train, y_train)
+# predictions = ada_model.predict(X_test)
+# print('Ada Boost R2 score on predictions: %.4f' % r2_score(y_test, predictions))
+#
+#
+# kn_model = KNeighborsRegressor()
+# kn_model.fit(X_train, y_train)
+# predictions = kn_model.predict(X_test)
+# print('KNeighbors R2 score on predictions: %.4f' % r2_score(y_test, predictions))
+#
+#
+# decision_tree_model = DecisionTreeRegressor()
+# decision_tree_model.fit(X_train, y_train)
+# predictions = decision_tree_model.predict(X_test)
+# print('Decision Tree R2 score on predictions: %.4f' % r2_score(y_test, predictions))
 
 
+# GRADIENT BOOSTING SEEMS TO PERFORM BEST, LET'S WORK OUT THE BEST HYPERPARAMETERS
 
 
+model = GradientBoostingRegressor()
+param_grid = {
+    'loss': ['squared_error', 'huber'],
+    'learning_rate': [0.1, 0.05, 0.01, 0.001],
+    'n_estimators': [100, 200, 500],
+    'criterion': ['friedman_mse', 'squared_error'],
+    'min_samples_split': [2, 3, 4],
+    'max_depth': [3, 4, 8],
+    'alpha': [0.8, 0.9, 0.99]
+}
+model_search = GridSearchCV(model, param_grid, cv=10, scoring='r2', n_jobs=4, verbose=1)
+model_search.fit(X_train, y_train)
+print('Best estimator:')
+print(model_search.best_estimator_)
+print('with score: %.6f' % model_search.best_score_)
 
 
+best_model = GradientBoostingRegressor()
+best_model.fit(X_, y_)
+predictions = best_model.predict(house_prices_validation)
 
+house_prices_validation = pd.read_csv('data/house-prices/test.csv')
+submission = pd.DataFrame({'PassengerId': house_prices_validation['Id'], 'SalePrice': predictions})
 
-
-
-
-
-
-
-
+# GradientBoostingRegressor(alpha=0.99, learning_rate=0.05, max_depth=4,
+#                           min_samples_split=3, n_estimators=500)
+# with score: 0.873012
 
 
 
