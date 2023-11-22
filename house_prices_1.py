@@ -311,8 +311,14 @@ categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', '
                        'Fence', 'MiscFeature', 'SaleCondition', 'OpenPorchSF']
 
 
-house_prices = pd.get_dummies(house_prices, columns=categorical_columns)
-house_prices_validation = pd.get_dummies(house_prices_validation, columns=categorical_columns)
+combined_datasets = pd.concat([house_prices, house_prices_validation], axis=0)
+combined_datasets = pd.get_dummies(combined_datasets, columns=categorical_columns)
+house_prices = combined_datasets.iloc[0:house_prices.shape[0], :].copy()
+house_prices_validation = combined_datasets.iloc[house_prices.shape[0]:, :].copy()
+house_prices_validation.drop('SalePrice', axis=1, inplace=True)
+# house_prices = pd.get_dummies(house_prices, columns=categorical_columns)
+# house_prices_validation = pd.get_dummies(house_prices_validation, columns=categorical_columns)
+
 
 X_, y_ = house_prices.drop('SalePrice', axis=1), house_prices['SalePrice']
 X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=7/10)
@@ -360,36 +366,35 @@ from sklearn.svm import SVR
 # GRADIENT BOOSTING SEEMS TO PERFORM BEST, LET'S WORK OUT THE BEST HYPERPARAMETERS
 
 
-model = GradientBoostingRegressor()
-param_grid = {
-    'loss': ['squared_error', 'huber'],
-    'learning_rate': [0.1, 0.05, 0.01, 0.001],
-    'n_estimators': [100, 200, 500],
-    'criterion': ['friedman_mse', 'squared_error'],
-    'min_samples_split': [2, 3, 4],
-    'max_depth': [3, 4, 8],
-    'alpha': [0.8, 0.9, 0.99]
-}
-model_search = GridSearchCV(model, param_grid, cv=10, scoring='r2', n_jobs=4, verbose=1)
-model_search.fit(X_train, y_train)
-print('Best estimator:')
-print(model_search.best_estimator_)
-print('with score: %.6f' % model_search.best_score_)
+# model = GradientBoostingRegressor()
+# param_grid = {
+#     'loss': ['squared_error', 'huber'],
+#     'learning_rate': [0.1, 0.05, 0.01, 0.001],
+#     'n_estimators': [100, 200, 500],
+#     'criterion': ['friedman_mse', 'squared_error'],
+#     'min_samples_split': [2, 3, 4],
+#     'max_depth': [3, 4, 8],
+#     'alpha': [0.8, 0.9, 0.99]
+# }
+# model_search = GridSearchCV(model, param_grid, cv=10, scoring='r2', n_jobs=4, verbose=1)
+# model_search.fit(X_train, y_train)
+# print('Best estimator:')
+# print(model_search.best_estimator_)
+# print('with score: %.6f' % model_search.best_score_)
 
-
-best_model = GradientBoostingRegressor()
-best_model.fit(X_, y_)
-predictions = best_model.predict(house_prices_validation)
-
-house_prices_validation = pd.read_csv('data/house-prices/test.csv')
-submission = pd.DataFrame({'PassengerId': house_prices_validation['Id'], 'SalePrice': predictions})
 
 # GradientBoostingRegressor(alpha=0.99, learning_rate=0.05, max_depth=4,
 #                           min_samples_split=3, n_estimators=500)
 # with score: 0.873012
 
 
-
-
-
-
+best_model = GradientBoostingRegressor(
+    alpha=0.99, learning_rate=0.05, max_depth=4, min_samples_split=3, n_estimators=500)
+# best_model.fit(X_train, y_train)
+# preds = best_model.predict(X_test)
+# print('R2 score: %.4f' % r2_score(y_test, preds))
+best_model.fit(X_, y_)
+predictions = best_model.predict(house_prices_validation)
+house_prices_v = pd.read_csv('data/house-prices/test.csv')
+submission = pd.DataFrame({'Id': house_prices_v['Id'], 'SalePrice': predictions})
+submission.to_csv('data/house-prices/submission-1st.csv', index=False)
