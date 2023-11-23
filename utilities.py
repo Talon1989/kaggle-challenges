@@ -45,7 +45,7 @@ class ReplayBuffer:
         assert len(self.states) == len(self.actions) == len(self.rewards)
         return len(self.actions)
 
-    def remember(self, s, a, r, s_, done):
+    def  remember(self, s, a, r, s_, done):
         if len(self.states) > self.max_size:
             del self.states[0]
             del self.actions[0]

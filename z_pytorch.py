@@ -46,6 +46,26 @@ class DiscreteAgent(nn.Module):
         return x
 
 
+class Actor(nn.Module):
+    def __init__(self, in_d: int, h_shape: np.array, out_d: int, dtype=torch.float64):
+        super().__init__()
+        torch.set_default_dtype(dtype)
+        self.layers = nn.ModuleList()
+        current_in = in_d
+        for h in h_shape:
+            self.layers.append(nn.Linear(current_in, h))
+            current_in = h
+        self.output = nn.Linear(h_shape[-1], out_d)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = self.relu(layer(x))
+        x = self.softmax(self.output(x))
+        return x
+
+
 class Dql:
     def __init__(self, env: gym.Env, hidden_shape:np.array, batch_size=64,
                  alpha:float=1/1_000, gamma:float=99/100, e_decay:float=99/100):
@@ -132,7 +152,33 @@ dql = Dql(gym.make('CartPole-v1'), np.array([8, 16, 32, 16]))
 
 
 class PolicyGradient:
-    pass
+    def __init__(self, env: gym.Env, hidden_shape:np.array, alpha:float=1/1_000, gamma:float=99/100):
+        self.env = env
+        self.n_s = self.env.observation_space.shape[0]
+        self.n_a = self.env.action_space.n
+        self.gamma = gamma
+        self.buffer = ReplayBuffer()
+        self.actor = Actor(self.n_s, hidden_shape, self.n_a)
+        self.optimizer = torch.optim.Adam(params=self.actor.parameters(), lr=alpha)
+        self.criterion = nn.MSELoss()
+
+    def _choose_action(self, s):
+        s = torch.tensor(s, dtype=torch.float64).unsqueeze(dim=0)
+        self.actor.eval()
+        with torch.no_grad():
+            probabilities = self.actor(s)
+            distribution = torch.distributions.Categorical(probs=probabilities)
+            a = distribution.sample().detach().numpy()
+            return a
+
+    def _store_transition(self, s, a, r):
+        self.buffer.remember(s, a, r, None, None)
+
+    def _learn(self):
+        pass
+
+    def _fit(self, n_episodes=2_000):
+        pass
 
 
 class ActorCriticNn:
@@ -143,4 +189,5 @@ class TD3PG:
     pass
 
 
-
+class SAC:
+    pass
