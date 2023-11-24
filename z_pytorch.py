@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import gym
 from utilities import ReplayBuffer
+from tqdm import tqdm
 
 
 # d_env = gym.make('CartPole-v1', render_mode='human')
@@ -356,7 +357,7 @@ class ActorContinuous(nn.Module):
             x = self.relu(layer(x))
         x = self.tanh(self.output(x))
         x = torch.mul(x, self.scalar).to(torch.float64)
-        return x
+        return x  # mean value
 
 
 # environment requires continuous action space
@@ -368,7 +369,8 @@ class TD3PG:
         self.env = env
         self.n_s = self.env.observation_space.shape[0]
         self.n_a = self.env.action_space.shape[0]  # hardcoded
-        self.max_action = self.env.action_space.high[0]    # hardcoded
+        self.max_action = self.env.action_space.high[0]  # hardcoded
+        self.min_action = self.env.action_space.low[0]  # hardcoded
         self.gamma = gamma
         self.actor_update_rate = actor_update
         self.tau = tau
@@ -387,6 +389,7 @@ class TD3PG:
         self.actor_optimizer = torch.optim.Adam(params=self.actor.parameters(), lr=alpha)
         self.critic_1_optimizer = torch.optim.Adam(params=self.critic_1.parameters(), lr=beta)
         self.critic_2_optimizer = torch.optim.Adam(params=self.critic_2.parameters(), lr=beta)
+        self.critic_criterion = nn.MSELoss()
 
     def actor_soft_update(self, tau=1.):
         for param, t_param in zip(self.actor.parameters(), self.t_actor.parameters()):
@@ -399,35 +402,123 @@ class TD3PG:
             t_param.data.copy_(tau * param.data + (1 - tau) * t_param.data)
 
     def _choose_action(self, s):
-        pass
+        s = torch.tensor(s, dtype=torch.float64).unsqueeze(dim=0)
+        self.actor.eval()
+        with torch.no_grad():
+            dist = torch.distributions.Normal(
+                loc=self.actor(s), scale=torch.tensor([self.noise for _ in range(self.n_a)]))
+            a = dist.sample()
+        return torch.clip(a, self.min_action, self.max_action)
 
     def _store_transition(self, s, a, r, s_, d):
         self.buffer.remember(s, a, r, s_, int(d))
 
-    def _update_actor(self):
-        pass
+    def _update_actor(self, states):
+        self.actor_optimizer.zero_grad()
+        self.actor.train()
+        actions = self.actor(states)
+        v_1 = self.critic_1(torch.concat([states, actions], dim=1))
+        actor_loss = - torch.mean(v_1)
+        actor_loss.backward()
+        self.actor_optimizer.step()
+        return actor_loss.detach().numpy()
 
-    def _update_critic(self):
-        pass
+    def _update_critic(self, states, actions, rewards, states_, dones):
 
-    def _learn(self):
-        pass
+        actions_ = self.t_actor(states_)
+        next_state_values = torch.min(
+            self.t_critic_1(torch.concat([states_, actions_], dim=1)),
+            self.t_critic_2(torch.concat([states_, actions_], dim=1)))
+        y = rewards + self.gamma * next_state_values * (1 - dones)
+
+        self.critic_1_optimizer.zero_grad()
+        self.critic_1.train()
+        pred_1 = self.critic_1(torch.concat([states, actions], dim=1))
+        critic_1_loss = self.critic_criterion(pred_1, y)
+        critic_1_loss.backward(retain_graph=True)
+        self.critic_1_optimizer.step()
+
+        self.critic_2_optimizer.zero_grad()
+        self.critic_2.train()
+        pred_2 = self.critic_2(torch.concat([states, actions], dim=1))
+        critic_2_loss = self.critic_criterion(pred_2, y)
+        critic_2_loss.backward(retain_graph=True)
+        self.critic_2_optimizer.step()
+
+        return critic_1_loss.detach().numpy(), critic_2_loss.detach().numpy()
+
+    def _learn(self, update_actor):
+        if self.buffer.get_buffer_size() < self.batch_size:
+            return
+        states, actions, rewards, states_, dones = self.buffer.get_buffer(
+            batch_size=self.batch_size, randomized=True, cleared=False)
+        states = torch.tensor(states, dtype=torch.float64)
+        actions = torch.tensor(actions, dtype=torch.float64).reshape([-1, 1])
+        rewards = torch.tensor(rewards, dtype=torch.float64).reshape([-1, 1])
+        states_ = torch.tensor(states_, dtype=torch.float64)
+        dones = torch.tensor(dones, dtype=torch.float64).reshape([-1, 1])
+        self._update_critic(states, actions, rewards, states_, dones)
+        self.critic_soft_update(tau=self.tau)
+        if update_actor:
+            self._update_actor(states)
+            self.actor_soft_update(tau=self.tau)
 
     def fit(self, n_episodes=2_000):
-        pass
+        scores, avg_scores = [], []
+        with tqdm(total=n_episodes) as pbar:
+            for ep in range(1, n_episodes+1):
+                score = 0
+                s = self.env.reset()[0]
+                iteration = 1
+                while True:
+                    a = self._choose_action(s)
+                    s_, r, d, t, _ = self.env.step(a)
+                    r = r.numpy()[0]
+                    a = a.detach().squeeze().numpy()
+                    score += r
+                    self._store_transition(s, a, r, s_, d)
+                    if d or t:
+                        break
+                    self._learn(update_actor=iteration % self.actor_update_rate == 0)
+                    s = s_
+                    iteration += 1
+                scores.append(score)
+                avg_scores.append(np.sum(scores[-50:]) / len(scores[-50:]))
+                # if ep % 10 == 0:
+                pbar.set_description('Episode %d | Avg score %.4f' % (ep, avg_scores[-1]))
+                pbar.update(1)
+
+    def generate_batch(self, n=5):
+        self.buffer.clear()
+        s = self.env.reset()[0]
+        for _ in range(n):
+            a = self._choose_action(s)
+            s_, r, d, t, _ = self.env.step(a)  # messiness below comes from 'a'
+            r = r.numpy()[0]
+            a = a.detach().squeeze().numpy()
+            self._store_transition(s, a, r, s_, d)
+            s = s_
+        return self.buffer.get_buffer(
+            self.batch_size, True, False)
 
 
 td3 = TD3PG(c_env, np.array([16, 32, 16]), np.array([16, 32, 16]))
-s = c_env.reset()[0]
-t = torch.tensor(s, dtype=torch.float64).unsqueeze(dim=0)
-actor = td3.actor
-critic = td3.critic_1
-print(
-    actor(t)
-)
-print(
-    critic(torch.concat([t, actor(t)], dim=1))
-)
+# s = c_env.reset()[0]
+# t = torch.tensor(s, dtype=torch.float64).unsqueeze(dim=0)
+# actor = td3.actor
+# critic = td3.critic_1
+# print(
+#     actor(t)
+# )
+# print(
+#     critic(torch.concat([t, actor(t)], dim=1))
+# )
+# states, actions, rewards, states_, dones = td3.generate_batch()
+# states = torch.tensor(states, dtype=torch.float64)
+# actions = torch.tensor(actions, dtype=torch.float64).reshape([-1, 1])
+# rewards = torch.tensor(rewards, dtype=torch.float64).reshape([-1, 1])
+# states_ = torch.tensor(states_, dtype=torch.float64)
+# dones = torch.tensor(dones, dtype=torch.float64).reshape([-1, 1])
 
 
 class SAC:
