@@ -25,6 +25,22 @@ def random_steps(n_episodes=10):
     d_env.close()
 
 
+def pendulum_random_steps(n_episodes=5):
+    pendulum = gym.make('Pendulum-v1', render_mode='human')
+    for _ in range(n_episodes):
+        pendulum.reset()
+        score = 0.
+        while True:
+            pendulum.render()
+            a = pendulum.action_space.sample()
+            _, r, d, t, _ = pendulum.step(a)
+            score += r
+            if d or t:
+                break
+        print('Score: %.3f' % score)
+    pendulum.close()
+
+
 # random_steps()
 
 
