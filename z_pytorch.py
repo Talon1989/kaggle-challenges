@@ -498,10 +498,13 @@ class TD3PG:
                     self._learn(update_actor=iteration % self.actor_update_rate == 0)
                     s = s_
                     iteration += 1
+                if self.noise > 1/100:
+                    self.noise = self.noise * self.noise_decay
                 scores.append(score)
                 avg_scores.append(np.sum(scores[-50:]) / len(scores[-50:]))
                 # if ep % 10 == 0:
-                pbar.set_description('Episode %d | Avg score %.4f' % (ep, avg_scores[-1]))
+                pbar.set_description('Episode %d | Avg score %.4f | Noise %.4f'
+                                     % (ep, avg_scores[-1], self.noise))
                 pbar.update(1)
 
     def generate_batch(self, n=5):
@@ -537,5 +540,210 @@ td3 = TD3PG(c_env, np.array([16, 32, 16]), np.array([16, 32, 16]))
 # dones = torch.tensor(dones, dtype=torch.float64).reshape([-1, 1])
 
 
+class ActorContinuousMeanStd(nn.Module):
+    def __init__(self, in_d: int, h_shape: np.array, out_d: int, dtype=torch.float64, clipper: float = 2.):
+        super().__init__()
+        torch.set_default_dtype(dtype)
+        self.layers = nn.ModuleList()
+        current_in = in_d
+        for h in h_shape:
+            self.layers.append(nn.Linear(current_in, h))
+            current_in = h
+        self.mean = nn.Linear(h_shape[-1], out_d)
+        self.log_std = nn.Linear(h_shape[-1], out_d)
+        self.relu = nn.ReLU()
+        self.clipper = clipper
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = self.relu(layer(x))
+        mean = self.mean(x)
+        log_std = self.log_std(x)
+        log_std = torch.clip(log_std, -self.clipper, +self.clipper)
+        return mean, log_std
+
+
+# implementation without exponential moving average (ema)
+# not tested for multiple actions (possible issues with StateActionAgent)
 class SAC:
-    pass
+    def __init__(self, env: gym.Env,
+                 hidden_actor: np.array, hidden_critic_q: np.array, hidden_critic_v: np.array,
+                 alpha: float = 1 / 1_000, beta: float = 1/1_000, gamma: float = 99/100, batch_size: int = 64):
+
+        self.env = env
+        self.n_s = self.env.observation_space.shape[0]
+        self.n_a = self.env.action_space.shape[0]  # hardcoded
+        self.max_action = self.env.action_space.high[0]  # hardcoded
+        self.min_action = self.env.action_space.low[0]  # hardcoded
+        self.gamma = gamma
+        self.temperature = 1 / 10
+        self.buffer = ReplayBuffer()
+        self.batch_size = batch_size
+
+        self.actor = ActorContinuousMeanStd(self.n_s, hidden_actor, self.n_a, clipper=2.)
+        self.q_1 = StateActionAgent((self.n_s + self.n_a), hidden_critic_q, self.n_a)
+        self.q_2 = StateActionAgent((self.n_s + self.n_a), hidden_critic_q, self.n_a)
+        self.v = StateValueAgent(self.n_s, hidden_critic_v)
+        self.target_v = StateValueAgent(self.n_s, hidden_critic_v)
+
+        self.actor_optimizer = torch.optim.Adam(params=self.actor.parameters(), lr=alpha)
+        self.actor_criterion = self._custom_actor_loss
+        self.q_1_optimizer = torch.optim.Adam(params=self.q_1.parameters(), lr=beta)
+        self.q_2_optimizer = torch.optim.Adam(params=self.q_2.parameters(), lr=beta)
+        self.v_optimizer = torch.optim.Adam(params=self.v.parameters(), lr=beta)
+        self.q_v_criterion = nn.MSELoss()
+        self._target_v_hard_update()
+
+    def _custom_actor_loss(self, states):
+        means, log_stds = self.actor(states)
+        stds = torch.exp(log_stds)
+        distribution = torch.distributions.Normal(loc=means, scale=stds)
+        samples = distribution.sample()
+        sampled_actions = torch.tanh(samples)
+        log_probs = distribution.log_prob(samples) - torch.log(1 - torch.pow(sampled_actions, 2) + torch.tensor(1e-16))
+        with torch.no_grad():
+            self.q_1.eval()
+            q_1_values = self.q_1(torch.cat([states, sampled_actions], dim=1))
+        loss = torch.mean(q_1_values - (self.temperature * log_probs))
+        return loss, log_probs
+
+    def _target_v_hard_update(self):
+        self.target_v.load_state_dict(self.v.state_dict())
+
+    def _choose_action(self, s):
+        s = torch.tensor(s, dtype=torch.float64).unsqueeze(dim=0)
+        self.actor.eval()
+        mean, log_std = self.actor(s)
+        distribution = torch.distributions.Normal(loc=mean, scale=torch.exp(log_std))
+        a = torch.tanh(distribution.sample())
+        return a * self.max_action
+
+    def _store_transition(self, s, a, r, s_, d):
+        self.buffer.remember(s, a, r, s, int(d))
+
+    def _learn(self):
+
+        if self.buffer.get_buffer_size() < self.batch_size:
+            return
+
+        states, actions, rewards, states_, dones = self.buffer.get_buffer(
+            batch_size=self.batch_size, randomized=True, cleared=False)
+        states = torch.tensor(states, dtype=torch.float64)
+        actions = torch.tensor(actions, dtype=torch.float64).reshape([-1, 1])
+        rewards = torch.tensor(rewards, dtype=torch.float64).reshape([-1, 1])
+        states_ = torch.tensor(states_, dtype=torch.float64)
+        dones = torch.tensor(dones, dtype=torch.float64).reshape([-1, 1])
+
+        self.actor_optimizer.zero_grad()
+        self.actor.train()
+        actor_loss, log_probs = self._custom_actor_loss(states)
+        actor_loss.backward(retain_graph=True)
+        self.actor_optimizer.step()
+
+        self.v.eval()
+        with torch.no_grad():
+            next_state_values = self.v(states_)
+        y = rewards + self.gamma * next_state_values * (1 - dones)
+        self.q_1_optimizer.zero_grad()
+        self.q_1.train()
+        q_1_preds = self.q_1(torch.cat([states, actions], dim=1))
+        q_1_loss = self.q_v_criterion(q_1_preds, y)
+        q_1_loss.backward(retain_graph=True)
+        self.q_1_optimizer.step()
+        self.q_2_optimizer.zero_grad()
+        self.q_2.train()
+        q_2_preds = self.q_2(torch.cat([states, actions], dim=1))
+        q_2_loss = self.q_v_criterion(q_2_preds, y)
+        q_2_loss.backward(retain_graph=True)
+        self.q_2_optimizer.step()
+
+        self.v_optimizer.zero_grad()
+        self.v.train()
+        self.q_1.eval()
+        self.q_2.eval()
+        with torch.no_grad():
+            q_1_preds = self.q_1(torch.cat([states, actions], dim=1))
+            q_2_preds = self.q_2(torch.cat([states, actions], dim=1))
+            q_values = torch.minimum(q_1_preds, q_2_preds)
+        state_values = self.v(states)
+        v_loss = self.q_v_criterion(state_values, (q_values - self.temperature * log_probs.detach()))
+        v_loss.backward(retain_graph=True)
+        self.v_optimizer.step()
+
+    def fit(self, n_episodes=2_000):
+        scores, avg_scores = [], []
+        with tqdm(total=n_episodes) as pbar:
+            for ep in range(1, n_episodes+1):
+                score = 0
+                s = self.env.reset()[0]
+                iteration = 1
+                while True:
+                    a = self._choose_action(s)
+                    s_, r, d, t, _ = self.env.step(a)
+                    r = r.numpy()[0]
+                    a = a.detach().squeeze().numpy()
+                    score += r
+                    self._store_transition(s, a, r, s_, d)
+                    if d or t:
+                        break
+                    if ep % 2 == 0:
+                        self._learn()
+                    s = s_
+                    iteration += 1
+                if self.temperature > 1 / 10_000:
+                    self.temperature = self.temperature * 99/100
+                if ep % 5 == 0:
+                    self._target_v_hard_update()
+                scores.append(score)
+                avg_scores.append(np.sum(scores[-50:]) / len(scores[-50:]))
+                # if ep % 10 == 0:
+                pbar.set_description('Episode %d | Avg score %.4f | Temp: %.4f'
+                                     % (ep, avg_scores[-1], self.temperature))
+                pbar.update(1)
+
+
+    def generate_batch(self, n=5):
+        self.buffer.clear()
+        s = self.env.reset()[0]
+        for _ in range(n):
+            a = self._choose_action(s)
+            s_, r, d, t, _ = self.env.step(a)  # messiness below comes from 'a'
+            r = r.numpy()[0]
+            a = a.detach().squeeze().numpy()
+            self._store_transition(s, a, r, s_, d)
+            s = s_
+        return self.buffer.get_buffer(
+            self.batch_size, True, False)
+
+
+
+sac = SAC(c_env, np.array([16, 32, 16]), np.array([16, 32, 16]), np.array([16, 32, 16]))
+actor = sac.actor
+q_1 = sac.q_2
+v = sac.v
+# s = c_env.reset()[0]
+# t = torch.tensor(s, dtype=torch.float64).unsqueeze(dim=0)
+# a = torch.tensor(c_env.action_space.sample(), dtype=torch.float64).unsqueeze(dim=1)
+# states, actions, rewards, states_, dones = sac.generate_batch()
+# states = torch.tensor(states, dtype=torch.float64)
+# actions = torch.tensor(actions, dtype=torch.float64).reshape([-1, 1])
+# rewards = torch.tensor(rewards, dtype=torch.float64).reshape([-1, 1])
+# states_ = torch.tensor(states_, dtype=torch.float64)
+# dones = torch.tensor(dones, dtype=torch.float64).reshape([-1, 1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
