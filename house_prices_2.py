@@ -201,26 +201,37 @@ criterion = nn.MSELoss()
 # x_b, y_b = next(iter(train_dataloader))
 
 
-for epoch in range(1, 6_001):
-    total_loss = 0
-    for x_batch, y_batch in train_dataloader:
-        optimizer.zero_grad()
-        regressor.train()
-        preds = regressor(x_batch)
-        loss = criterion(preds, y_batch)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.detach().numpy()
-    if epoch % 20 == 0:
-        # print("Epoch %d | Loss %.4f" % (epoch, total_loss))
-        print(f'Epoch {epoch} | Loss {total_loss:_}')
+# for epoch in range(1, 6_001):
+#     total_loss = 0
+#     for x_batch, y_batch in train_dataloader:
+#         optimizer.zero_grad()
+#         regressor.train()
+#         preds = regressor(x_batch)
+#         loss = criterion(preds, y_batch)
+#         loss.backward()
+#         optimizer.step()
+#         total_loss += loss.detach().numpy()
+#     if epoch % 20 == 0:
+#         # print("Epoch %d | Loss %.4f" % (epoch, total_loss))
+#         print(f'Epoch {epoch} | Loss {total_loss:_}')
 
 
+# torch.save(regressor, '/home/fabio/PycharmProjects/kaggle-challenges/data/models/house_price_regressor.pth')
 
 
+regressor = torch.load('/home/fabio/PycharmProjects/kaggle-challenges/data/models/house_price_regressor.pth')
 
-# house_prices_v = pd.read_csv('data/house-prices/test.csv')
 
+# predictions = regressor(torch.tensor(X_test, dtype=torch.float64)).detach()
+# y_test = torch.tensor(y_test, dtype=torch.float64)
+# print(f'R2 score : {r2_score(y_test, predictions)}')
+
+
+X_validation = torch.tensor(house_prices_validation.to_numpy().astype(float), dtype=torch.float64)
+predictions = regressor(X_validation).detach().squeeze()
+house_prices_v = pd.read_csv('data/house-prices/test.csv')
+submission = pd.DataFrame({'Id': house_prices_v['Id'], 'SalePrice': predictions})
+submission.to_csv('data/house-prices/submission-2nd.csv', index=False)
 
 
 
