@@ -697,7 +697,7 @@ class SAC:
                 scores.append(score)
                 avg_scores.append(np.sum(scores[-50:]) / len(scores[-50:]))
                 # if ep % 10 == 0:
-                pbar.set_description('Episode %d | Avg score %.4f | Temp: %.4f'
+                pbar.set_description('Episode %d | Avg score %.4f | Temp: %.4f  '
                                      % (ep, avg_scores[-1], self.temperature))
                 pbar.update(1)
 

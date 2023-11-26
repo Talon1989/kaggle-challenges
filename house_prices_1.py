@@ -105,6 +105,7 @@ def categorical_data_analysis():
 garage_features = ['GarageType', 'GarageYrBlt', 'GarageFinish', 'GarageCars', 'GarageArea', 'GarageQual', 'GarageCond']
 features_to_drop = [feat for feat in garage_features if feat != 'GarageCars']
 for df in house_prices_total:
+    df.drop('LotFrontage', axis=1, inplace=True)
     df.drop(features_to_drop, axis=1, inplace=True)
     df.drop('Id', axis=1, inplace=True)
     df.drop('FireplaceQu', axis=1, inplace=True)  # already have similar data
@@ -211,7 +212,7 @@ for df in house_prices_total:
 #     df.loc[df['LandContour'] != 'Lvl', 'LandContour'] = 'Non-Lvl'
 
 
-# OverallQual and OverallCond are extemely positively correlated, so we just use one and simplify the data
+# OverallQual and OverallCond are extremely positively correlated, so we just use one and simplify the data
 # corr = house_prices[['OverallQual', 'OverallCond']].corr()
 for df in house_prices_total:
     low_indices = df[df['OverallQual'] <= 4].index
