@@ -79,25 +79,27 @@ optimizer = torch.optim.Adam(params=regressor.parameters(), lr=1/1_500)
 criterion = nn.MSELoss()
 
 
-# for epoch in range(1, 6_001):
-#     total_loss = 0
-#     for x_batch, y_batch in train_dataloader:
-#         optimizer.zero_grad()
-#         regressor.train()
-#         preds = regressor(x_batch)
-#         loss = criterion(preds, y_batch)
-#         loss.backward()
-#         optimizer.step()
-#         total_loss += loss.detach().numpy()
-#     if epoch % 10 == 0:
-#         # print("Epoch %d | Loss %.4f" % (epoch, total_loss))
-#         print(f'Epoch {epoch} | Loss {total_loss:_.3f}')
-#
-#
+for epoch in range(1, 401):
+    total_loss = 0
+    for x_batch, y_batch in train_dataloader:
+        optimizer.zero_grad()
+        regressor.train()
+        preds = regressor(x_batch)
+        loss = criterion(preds, y_batch)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.detach().numpy()
+    if epoch % 10 == 0:
+        # print("Epoch %d | Loss %.4f" % (epoch, total_loss))
+        print(f'Epoch {epoch} | Loss {total_loss:_.3f}')
+
+
 # torch.save(regressor, '/home/fabio/PycharmProjects/kaggle-challenges/data/models/mohs_regressor.pth')
 
 
-regressor = torch.load('/home/fabio/PycharmProjects/kaggle-challenges/data/models/mohs_regressor.pth')
+# regressor = torch.load('/home/fabio/PycharmProjects/kaggle-challenges/data/models/mohs_regressor.pth')
+
+
 predictions = regressor(torch.tensor(X_test, dtype=torch.float64)).detach()
 y_test = torch.tensor(y_test, dtype=torch.float64)
 print(f'R2 score : {r2_score(y_test, predictions)}')
