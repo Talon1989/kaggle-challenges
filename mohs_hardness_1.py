@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 # from sklearn.preprocessing import LabelEncoder
-# from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
@@ -37,6 +37,7 @@ elec_max = hardness['allelectrons_Total'].max()
 X_ = hardness.drop('Hardness', axis=1).to_numpy()
 y_ = hardness['Hardness'].to_numpy().reshape([-1, 1])
 X_ = X_.astype(float)
+# X_ = StandardScaler().fit_transform(X_)
 y_ = y_.astype(float)
 
 
@@ -61,12 +62,12 @@ class Regressor(nn.Module):
         # self.layer_5 = nn.Linear(32, 1)
         # self.relu = nn.ReLU()
         self.sequence = nn.Sequential(
-            nn.Linear(in_dim, 32), nn.ReLU(),
-            nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, 64), nn.ReLU(),
-            nn.Dropout(p=3/4),
-            nn.Linear(64, 32), nn.ReLU(),
-            nn.Dropout(p=3 / 4),
+            nn.Linear(in_dim, 32), nn.ReLU(), nn.BatchNorm1d(32),
+            nn.Linear(32, 32), nn.ReLU(), nn.BatchNorm1d(32),
+            nn.Linear(32, 64), nn.ReLU(), nn.BatchNorm1d(64),
+            # nn.Dropout(p=3/4),
+            nn.Linear(64, 32), nn.ReLU(), nn.BatchNorm1d(32),
+            # nn.Dropout(p=3 / 4),
             nn.Linear(32, 1)
         )
 
@@ -79,7 +80,7 @@ optimizer = torch.optim.Adam(params=regressor.parameters(), lr=1/1_500)
 criterion = nn.MSELoss()
 
 
-for epoch in range(1, 401):
+for epoch in range(1, 2_001):
     total_loss = 0
     for x_batch, y_batch in train_dataloader:
         optimizer.zero_grad()
@@ -94,7 +95,7 @@ for epoch in range(1, 401):
         print(f'Epoch {epoch} | Loss {total_loss:_.3f}')
 
 
-# torch.save(regressor, '/home/fabio/PycharmProjects/kaggle-challenges/data/models/mohs_regressor.pth')
+torch.save(regressor, '/home/fabio/PycharmProjects/kaggle-challenges/data/models/mohs_regressor.pth')
 
 
 # regressor = torch.load('/home/fabio/PycharmProjects/kaggle-challenges/data/models/mohs_regressor.pth')

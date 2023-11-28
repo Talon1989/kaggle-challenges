@@ -154,8 +154,8 @@ categorical_columns = ['MSZoning', 'Street', 'Alley', 'LotShape', 'LotConfig', '
                        'KitchenQual', 'Functional', 'MiscFeature', 'SaleCondition']
 combined_datasets = pd.concat([house_prices, house_prices_validation], axis=0)
 combined_datasets = pd.get_dummies(combined_datasets, columns=categorical_columns)
-scaler = StandardScaler()
-scaler.fit(combined_datasets.drop('SalePrice', axis=1).to_numpy().astype(float))  # NOT IMPLEMENTED
+# scaler = StandardScaler()
+# scaler.fit(combined_datasets.drop('SalePrice', axis=1).to_numpy().astype(float))  # NOT IMPLEMENTED
 house_prices = combined_datasets.iloc[0:house_prices.shape[0], :].copy()
 house_prices_validation = combined_datasets.iloc[house_prices.shape[0]:, :].copy()
 house_prices_validation.drop('SalePrice', axis=1, inplace=True)
@@ -164,6 +164,7 @@ house_prices_validation.drop('SalePrice', axis=1, inplace=True)
 X_ = house_prices.drop('SalePrice', axis=1).to_numpy()
 y_ = house_prices['SalePrice'].to_numpy().reshape([-1, 1])
 X_ = X_.astype(float)
+# scaler.transform(X_)
 y_ = y_.astype(float)
 
 X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=75/100)
@@ -173,7 +174,7 @@ train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 in_dim = X_.shape[-1]
 
 
-class Regressor(nn.Module):
+class RegressorOld(nn.Module):
     def __init__(self):
         super().__init__()
         torch.set_default_dtype(torch.float64)
@@ -195,43 +196,59 @@ class Regressor(nn.Module):
         return self.mod(x)
 
 
-regressor = Regressor()
+class Regressor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        torch.set_default_dtype(torch.float64)
+        self.mod = nn.Sequential(
+            nn.Linear(in_dim, 32), nn.ReLU(), nn.Dropout(p=1/10),
+            nn.Linear(32, 32), nn.ReLU(), nn.Dropout(p=1/10),
+            nn.Linear(32, 64), nn.ReLU(), nn.Dropout(p=1/10),
+            nn.Linear(64, 32), nn.ReLU(), nn.Dropout(p=1/10),
+            nn.Linear(32, 1)
+        )
+
+    def forward(self, x):
+        return self.mod(x)
+
+
+regressor = RegressorOld()
 optimizer = torch.optim.Adam(params=regressor.parameters(), lr=1/1_500)
 criterion = nn.MSELoss()
 # x_b, y_b = next(iter(train_dataloader))
 
 
-# for epoch in range(1, 6_001):
-#     total_loss = 0
-#     for x_batch, y_batch in train_dataloader:
-#         optimizer.zero_grad()
-#         regressor.train()
-#         preds = regressor(x_batch)
-#         loss = criterion(preds, y_batch)
-#         loss.backward()
-#         optimizer.step()
-#         total_loss += loss.detach().numpy()
-#     if epoch % 20 == 0:
-#         # print("Epoch %d | Loss %.4f" % (epoch, total_loss))
-#         print(f'Epoch {epoch} | Loss {total_loss:_}')
+for epoch in range(1, 4_001):
+    total_loss = 0
+    for x_batch, y_batch in train_dataloader:
+        optimizer.zero_grad()
+        regressor.train()
+        preds = regressor(x_batch)
+        loss = criterion(preds, y_batch)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.detach().numpy()
+    if epoch % 20 == 0:
+        # print("Epoch %d | Loss %.4f" % (epoch, total_loss))
+        print(f'Epoch {epoch} | Loss {total_loss:_}')
 
 
-# torch.save(regressor, '/home/fabio/PycharmProjects/kaggle-challenges/data/models/house_price_regressor.pth')
+torch.save(regressor, '/home/fabio/PycharmProjects/kaggle-challenges/data/models/house_price_regressor_scaled.pth')
 
 
-regressor = torch.load('/home/fabio/PycharmProjects/kaggle-challenges/data/models/house_price_regressor.pth')
+# regressor = torch.load('/home/fabio/PycharmProjects/kaggle-challenges/data/models/house_price_regressor_scaled.pth')
 
 
-# predictions = regressor(torch.tensor(X_test, dtype=torch.float64)).detach()
-# y_test = torch.tensor(y_test, dtype=torch.float64)
-# print(f'R2 score : {r2_score(y_test, predictions)}')
+predictions = regressor(torch.tensor(X_test, dtype=torch.float64)).detach()
+y_test = torch.tensor(y_test, dtype=torch.float64)
+print(f'R2 score : {r2_score(y_test, predictions)}')
 
 
 X_validation = torch.tensor(house_prices_validation.to_numpy().astype(float), dtype=torch.float64)
 predictions = regressor(X_validation).detach().squeeze()
 house_prices_v = pd.read_csv('data/house-prices/test.csv')
 submission = pd.DataFrame({'Id': house_prices_v['Id'], 'SalePrice': predictions})
-submission.to_csv('data/house-prices/submission-2nd.csv', index=False)
+submission.to_csv('data/house-prices/submission-3rd.csv', index=False)
 
 
 
