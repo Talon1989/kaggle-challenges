@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from tqdm import tqdm
 from sklearn.metrics import r2_score
+from utilities import Swish
 
 
 '''
@@ -33,6 +34,10 @@ elec_max = hardness['allelectrons_Total'].max()
 
 
 # print(correlation_matrix)
+
+hardness.drop('id', axis=1, inplace=True)
+hardness.drop('allelectrons_Average', axis=1, inplace=True)  # features is really similar to 'atomicweight_Average
+
 
 X_ = hardness.drop('Hardness', axis=1).to_numpy()
 y_ = hardness['Hardness'].to_numpy().reshape([-1, 1])
@@ -65,9 +70,9 @@ class Regressor(nn.Module):
             nn.Linear(in_dim, 32), nn.ReLU(), nn.BatchNorm1d(32),
             nn.Linear(32, 32), nn.ReLU(), nn.BatchNorm1d(32),
             nn.Linear(32, 64), nn.ReLU(), nn.BatchNorm1d(64),
-            # nn.Dropout(p=3/4),
+            nn.Dropout(p=1/10),
             nn.Linear(64, 32), nn.ReLU(), nn.BatchNorm1d(32),
-            # nn.Dropout(p=3 / 4),
+            nn.Dropout(p=1/10),
             nn.Linear(32, 1)
         )
 
@@ -75,12 +80,45 @@ class Regressor(nn.Module):
         return self.sequence(x)
 
 
-regressor = Regressor()
+class SwishRegressor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        torch.set_default_dtype(torch.float64)
+        self.layer_1 = nn.Linear(in_dim, 32)
+        self.norm_1 = nn.BatchNorm1d(32)
+        self.layer_2 = nn.Linear(32, 32)
+        self.norm_2 = nn.BatchNorm1d(32)
+        self.layer_3 = nn.Linear(32, 64)
+        self.norm_3 = nn.BatchNorm1d(64)
+        self.layer_4 = nn.Linear(64, 32)
+        self.norm_4 = nn.BatchNorm1d(32)
+        self.layer_5 = nn.Linear(32, 1)
+        self.swish = Swish()
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=1/10)
+
+    def forward(self, x):
+        x = self.relu(self.layer_1(x))
+        # print(x)
+        x = self.norm_1(x)
+        x = self.relu(self.layer_2(x))
+        x = self.norm_2(x)
+        x = self.relu(self.layer_3(x))
+        x = self.norm_3(x)
+        x = self.dropout(x)
+        x = self.relu(self.layer_4(x))
+        x = self.norm_4(x)
+        x = self.dropout(x)
+        x = self.layer_5(x)
+        return x
+
+
+regressor = SwishRegressor()
 optimizer = torch.optim.Adam(params=regressor.parameters(), lr=1/1_500)
 criterion = nn.MSELoss()
 
 
-for epoch in range(1, 2_001):
+for epoch in range(1, 1_001):
     total_loss = 0
     for x_batch, y_batch in train_dataloader:
         optimizer.zero_grad()
@@ -110,3 +148,7 @@ print(f'R2 score : {r2_score(y_test, predictions)}')
 # hardness_v = pd.read_csv('data/mohs-hardness/test.csv')
 # submission = pd.DataFrame({'Id': hardness_v['Id'], 'Hardness': predictions})
 # submission.to_csv('data/mohs-hardness/submission-1st.csv', index=False)
+
+
+# 0.36
+
