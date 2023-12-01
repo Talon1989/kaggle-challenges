@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from tqdm import tqdm
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, median_absolute_error
 from scipy.stats import zscore
 import matplotlib
 matplotlib.use('TkAgg')
@@ -98,16 +98,71 @@ filtered_train[skewed_features] = np.log1p(filtered_train[skewed_features])  # n
 test_data[skewed_features] = np.log1p(test_data[skewed_features])
 
 
+# SCALING
 
 
+feature_columns = filtered_train.drop(['id', 'Hardness', 'Dataset'], axis=1).columns.values
+scaler = StandardScaler()
+scaler.fit(filtered_train[feature_columns])
+scaled_train_features = scaler.transform(filtered_train[feature_columns])
+scaled_test_features = scaler.transform(test_data[feature_columns])
+filtered_train[feature_columns] = scaled_train_features
+test_data[feature_columns] = scaled_test_features
 
 
+# MODEL EVALUATION
 
 
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.svm import SVR
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
+from lightgbm import LGBMRegressor
+
+linear = LinearRegression()
+ridge = Ridge()
+lasso = Lasso()
+kr = KernelRidge()
+dt = DecisionTreeRegressor()
+svr = SVR()
+knn = KNeighborsRegressor()
+rf = RandomForestRegressor()
+ada = AdaBoostRegressor()
+lgbm_regressor = LGBMRegressor()
+model_list = [linear, ridge, lasso, kr, dt, svr, knn, rf, ada, lgbm_regressor]
+r2_results, mae_results = [], []
+
+X_, y_ = filtered_train.drop(['id', 'Hardness', 'Dataset'], axis=1), filtered_train['Hardness']
+X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=7/10, random_state=42)
+
+for model in model_list:
+    model.fit(X_train, y_train)
+    predictions = model.predict(X_test)
+    r2 = r2_score(y_test, predictions)
+    r2_results.append(r2)
+    mae = median_absolute_error(y_test, predictions)
+    mae_results.append(mae)
+    print(f"model {str(model)} | r2 score: {r2:_.3f} | median abs error: {mae:_.3f}")
 
 
+# OPTIMIZING HYPERPARAMS
 
 
-
+param_grid = {
+    'loss': ['squared_error', 'huber'],
+    'learning_rate': [0.1, 0.05, 0.01, 0.001],
+    'n_estimators': [100, 200, 500],
+    'criterion': ['friedman_mse', 'squared_error'],
+    'min_samples_split': [2, 3, 4],
+    'max_depth': [3, 4, 8],
+    'alpha': [0.8, 0.9, 0.99]
+}
+# model_search = GridSearchCV(model, param_grid, cv=10, scoring='r2', n_jobs=4, verbose=1)
+# model_search.fit(X_train, y_train)
+# print('Best estimator:')
+# print(model_search.best_estimator_)
+# print('with score: %.6f' % model_search.best_score_)
 
 
