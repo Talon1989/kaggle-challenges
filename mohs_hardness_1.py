@@ -9,6 +9,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from tqdm import tqdm
 from sklearn.metrics import r2_score
 from utilities import Swish
+from scipy.stats import zscore
 
 
 '''
@@ -39,14 +40,30 @@ hardness.drop('id', axis=1, inplace=True)
 hardness.drop('allelectrons_Average', axis=1, inplace=True)  # features is really similar to 'atomicweight_Average
 
 
-X_ = hardness.drop('Hardness', axis=1).to_numpy()
-y_ = hardness['Hardness'].to_numpy().reshape([-1, 1])
+# deal with outliers
+interested_columns = list(hardness.columns)[0:-1]
+threshold = 5  # number of stds from 0 to be considered an outlier
+z_scores = zscore(hardness[interested_columns])
+filtered_train = hardness.loc[(z_scores < threshold).all(axis=1), hardness.columns]
+
+
+# deal with skewness
+filtered_skewed = filtered_train.iloc[:, 1:-2].skew()
+# skewed_features = filtered_skewed[filtered_skew > 0.75].index.values
+skewed_features = filtered_skewed[filtered_skewed.abs() > 0.75].index.values
+filtered_train[skewed_features] = np.log1p(filtered_train[skewed_features])  # np.log1p(x) = np.log(1+x)
+hardness_test[skewed_features] = np.log1p(hardness_test[skewed_features])
+
+
+# X_ = hardness.drop('Hardness', axis=1).to_numpy()
+# y_ = hardness['Hardness'].to_numpy().reshape([-1, 1])
+X_ = filtered_train.drop('Hardness', axis=1).to_numpy()
+y_ = filtered_train['Hardness'].to_numpy().reshape([-1, 1])
 X_ = X_.astype(float)
-# X_ = StandardScaler().fit_transform(X_)
 y_ = y_.astype(float)
 
 
-X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=75/100)
+X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=80/100)
 train_dataset = TensorDataset(
     torch.tensor(X_train, dtype=torch.float64), torch.tensor(y_train, dtype=torch.float64))
 train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
@@ -150,5 +167,5 @@ print(f'R2 score : {r2_score(y_test, predictions)}')
 # submission.to_csv('data/mohs-hardness/submission-1st.csv', index=False)
 
 
-# 0.36
+# 0.37
 

@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from tqdm import tqdm
 from sklearn.metrics import r2_score
+from scipy.stats import zscore
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -72,3 +73,41 @@ def create_variable_plots(variable):
 # 5 highest hardness correlated features
 important_features = correlation_matrix['Hardness'].abs().sort_values(ascending=False).index[1:6]
 important_features = list(important_features)
+
+
+# DEALING WITH OUTLIERS IN TRAINING DATA
+# z-score returns the number of stds from the mean of a standard gaussian: Z = (x-mean)/std
+
+interested_columns = list(train_data.columns)[1:-2]
+threshold = 5  # number of stds from 0 to be considered an outlier
+z_scores = zscore(train_data[interested_columns])
+filtered_train = train_data.loc[(z_scores < threshold).all(axis=1), train_data.columns]
+# z_scores_elec_total = zscore(train_data[interested_columns[0]])
+# filtered_data = train_data[(z_scores_elec_total < threshold)]
+
+
+# TRANSFORMATION OF SKEWED DATA
+# need to remove id and Dataset to get numerical skew, also remove hardness
+
+filtered_skewed = filtered_train.iloc[:, 1:-2].skew()
+# skewed_features = filtered_skewed[filtered_skew > 0.75].index.values
+skewed_features = filtered_skewed[filtered_skewed.abs() > 0.75].index.values
+filtered_train[skewed_features] = np.log1p(filtered_train[skewed_features])  # np.log1p(x) = np.log(1+x)
+
+# do it for the test (same features are skewed)
+test_data[skewed_features] = np.log1p(test_data[skewed_features])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
