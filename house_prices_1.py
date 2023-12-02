@@ -399,3 +399,14 @@ predictions = best_model.predict(house_prices_validation)
 house_prices_v = pd.read_csv('data/house-prices/test.csv')
 submission = pd.DataFrame({'Id': house_prices_v['Id'], 'SalePrice': predictions})
 submission.to_csv('data/house-prices/submission-1st.csv', index=False)
+
+
+
+
+
+
+
+
+
+
+

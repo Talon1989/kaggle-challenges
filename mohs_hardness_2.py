@@ -137,32 +137,80 @@ r2_results, mae_results = [], []
 X_, y_ = filtered_train.drop(['id', 'Hardness', 'Dataset'], axis=1), filtered_train['Hardness']
 X_train, X_test, y_train, y_test = train_test_split(X_, y_, train_size=7/10, random_state=42)
 
-for model in model_list:
-    model.fit(X_train, y_train)
-    predictions = model.predict(X_test)
+for m in model_list:
+    m.fit(X_train, y_train)
+    predictions = m.predict(X_test)
     r2 = r2_score(y_test, predictions)
     r2_results.append(r2)
     mae = median_absolute_error(y_test, predictions)
     mae_results.append(mae)
-    print(f"model {str(model)} | r2 score: {r2:_.3f} | median abs error: {mae:_.3f}")
+    print(f"model {str(m)} | r2 score: {r2:_.3f} | median abs error: {mae:_.3f}")
 
 
 # OPTIMIZING HYPERPARAMS
 
 
-param_grid = {
-    'loss': ['squared_error', 'huber'],
-    'learning_rate': [0.1, 0.05, 0.01, 0.001],
-    'n_estimators': [100, 200, 500],
-    'criterion': ['friedman_mse', 'squared_error'],
-    'min_samples_split': [2, 3, 4],
-    'max_depth': [3, 4, 8],
-    'alpha': [0.8, 0.9, 0.99]
-}
-# model_search = GridSearchCV(model, param_grid, cv=10, scoring='r2', n_jobs=4, verbose=1)
+# model = LGBMRegressor()
+# param_grid = {
+#     'learning_rate': [0.01, 0.1],
+#     'n_estimators': [100, 200, 300],
+#     'max_depth': [3, 5, 7],
+#     'subsample': [0.8, 1.0],
+#     'colsample_bytree': [0.8, 1.0],
+#     'reg_lambda': [0.1, 1.0, 10.0],
+# }
+# param_grid = {
+#     'num_leaves': [30, 35, 40],
+#     'max_depth': [3, 5, 7],
+#     'subsample': [0.8, 1.0],
+#     'colsample_bytree': [0.8, 1.0],
+#     'reg_lambda': [0.1, 1.0, 10.0],
+# }
+# model_search = GridSearchCV(model, param_grid, cv=10, scoring='r2', n_jobs=4, verbose=0)
 # model_search.fit(X_train, y_train)
+# model_search.fit(X_, y_)
 # print('Best estimator:')
 # print(model_search.best_estimator_)
 # print('with score: %.6f' % model_search.best_score_)
+
+
+# LGBMRegressor(colsample_bytree=0.8, max_depth=7, reg_lambda=10.0, subsample=0.8)
+# LGBMRegressor(colsample_bytree=0.8, max_depth=7, reg_lambda=1.0, subsample=0.8)
+# LGBMRegressor(colsample_bytree=0.8, max_depth=7, num_leaves=40, reg_lambda=10.0, subsample=0.8)
+
+
+# PREDICTIONS AND SUBMISSIONS
+
+
+# model = LGBMRegressor(colsample_bytree=0.8, max_depth=7, num_leaves=40, reg_lambda=10.0, subsample=0.8)
+# model.fit(X_, y_)
+# predictions = model.predict(test_data.drop(['id', 'Dataset'], axis=1))
+# submission = pd.DataFrame({'id': test_data['id'], 'Hardness': predictions})
+# submission.to_csv('data/mohs-hardness/submission-2nd.csv', index=False)
+
+
+param_grid = {
+    'objective': 'regression',
+    'num_leaves': 100,
+    'learning_rate': 0.09859118545432137,
+    'feature_fraction': 0.9229719354552683,
+    'bagging_fraction': 0.947276868243785,
+    'bagging_freq': 8,
+    'max_depth': 15,
+    'min_child_samples': 9
+}
+
+lgb_opt = LGBMRegressor(**param_grid)
+lgb_opt.fit(X_, y_)
+predictions = lgb_opt.predict(test_data.drop(['id', 'Dataset'], axis=1))
+submission = pd.DataFrame({'id': test_data['id'], 'Hardness': predictions})
+submission.to_csv('data/mohs-hardness/submission-3rd.csv', index=False)
+
+
+
+
+
+
+
 
 
