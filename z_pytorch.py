@@ -716,7 +716,6 @@ class SAC:
             self.batch_size, True, False)
 
 
-
 sac = SAC(c_env, np.array([16, 32, 16]), np.array([16, 32, 16]), np.array([16, 32, 16]))
 actor = sac.actor
 q_1 = sac.q_2
