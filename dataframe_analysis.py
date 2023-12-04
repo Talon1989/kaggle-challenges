@@ -1,5 +1,8 @@
+from operator import not_
+
 import numpy as np
 import pandas as pd
+from pyparsing import col
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -33,7 +36,7 @@ dataframe = pd.read_csv('data/house-prices/train.csv')
 df_2 = pd.read_csv('data/house-prices/test.csv')
 
 
-class DataVisualization:
+class DataAnalysis:
     def __init__(self, df: pd.DataFrame, target_feature: str=None):
         self.df = df
         self.df_size = len(self.df) * len(self.df.columns)
@@ -43,6 +46,11 @@ class DataVisualization:
         self.feature_columns = np.delete(self.df.columns.values, target_index)
         self.categorical_features = self.df[self.feature_columns].select_dtypes(include=['object']).columns.values
         self.numerical_features = self.df[self.feature_columns].select_dtypes(include=['number']).columns.values
+
+
+class DataVisualization(DataAnalysis):
+    def __init__(self, df: pd.DataFrame, target_feature: str=None):
+        super().__init__(df, target_feature)
 
     def feature_types(self):
         categorical_columns = self.df.select_dtypes(include=['object']).columns.values
@@ -137,14 +145,101 @@ class DataVisualization:
         plt.show()
 
 
+class DataFormatting(DataAnalysis):
+    def __init__(self, df: pd.DataFrame, target_feature: str=None):
+        super().__init__(df, target_feature)
+
+    def remove_nans(self, columns):
+        if isinstance(columns, str):
+            not_nan_indices = self.df[self.df[columns].notna()].index
+            self.df = self.df.iloc[not_nan_indices, :]
+        else:
+            not_nan_indices = self.df[self.df[columns].notna().all(axis=1)].index
+            self.df = self.df.iloc[not_nan_indices, :]
+
+    def return_remove_nans(self, columns):
+        # if isinstance(columns, str):
+        #     columns = [columns]
+        # for c in columns:
+        #     self.df[c].dropna(inplace=True)
+        if isinstance(columns, str):
+            not_nan_indices = self.df[self.df[columns].notna()].index
+            self.df = self.df.iloc[not_nan_indices, :]
+        else:
+            not_nan_indices = self.df[self.df[columns].notna().all(axis=1)].index
+            self.df = self.df.iloc[not_nan_indices, :]
+        return self.df
+
+    def change_nans(self, columns, value):
+        """
+        :param columns: column or columns to be checked
+        :param value: value to be transformed to
+        careful when dealing with categorical and numerical feature columns and same value
+        """
+        if isinstance(columns, str):
+            columns = [columns]
+        for c in columns:
+            # nan_indices = self.df[self.df[c].isna()].index
+            # self.df.loc[nan_indices, c] = value
+            self.df[c].fillna(value, inplace=True)
+
+    def remove_outliers(self, columns, threshold=5.):
+        """
+        :param columns: features to be included in the operation (need to be numerical) and containing no nan
+        :param threshold: number of stds from the mean to be considered an outlier
+        """
+        if isinstance(columns, str):
+            z_scores = zscore(self.df[columns])
+            self.df = self.df.loc[(np.abs(z_scores) < threshold), :]
+        else:
+            z_scores = zscore(self.df[columns])
+            self.df = self.df.loc[(np.abs(z_scores) < threshold).all(axis=1), :]
+
+    def return_remove_outliers(self, columns, threshold=5.):
+        """
+        :param columns: features to be included in the operation (need to be numerical) and containing no nan
+        :param threshold: number of stds from the mean to be considered an outlier
+        """
+        if isinstance(columns, str):
+            z_scores = zscore(self.df[columns])
+            self.df = self.df.loc[(np.abs(z_scores) < threshold), :]
+        else:
+            z_scores = zscore(self.df[columns])
+            self.df = self.df.loc[(np.abs(z_scores) < threshold).all(axis=1), :]
+        return self.df
+
+    def one_hot_columns(self, columns):
+        self.df = pd.get_dummies(self.df, columns=columns)
+
+    def return_one_hot_columns(self, columns):
+        self.df = pd.get_dummies(self.df, columns=columns)
+        return self.df
+
+    def log_skew_data(self, columns, skewness:float=0.75):
+        """
+        :param columns: numerical column features
+        :param skewness: skewness
+        """
+        skewed_data = self.df.loc[:, columns].skew()
+        skewed_features = skewed_data[skewed_data.abs() > skewness].index.values
+        self.df[skewed_features] = np.log1p(self.df[skewed_features])
+
+
 visualization = DataVisualization(dataframe, 'SalePrice')
 # visualization.correlation_matrix()
 # visualization.feature_plots('LotArea')
 # visualization.dataframe_feature_histogram(dataframe, df_2, 'LotArea')
 features = ['LotArea', 'Street', 'Alley', 'OverallCond', 'OverallQual', 'BedroomAbvGr', 'OpenPorchSF']
 # visualization.dataframe_features_histogram(dataframe, df_2, features)
-visualization.skewness()
-
-
-
-
+# visualization.skewness()
+num_cols = ['Id', 'LotArea']
+# nan_cols = ['Alley', 'GarageYrBlt']
+nan_cols = ['Alley', 'MasVnrType']
+formatting = DataFormatting(dataframe, 'SalePrice')
+# formatting.change_nans(['LotFrontage', 'LotArea'], 0.)
+# formatting.remove_nans('LotFrontage')
+dataframe = formatting.return_remove_nans('LotFrontage')
+dataframe = formatting.return_remove_outliers('LotFrontage')
+dataframe = formatting.return_one_hot_columns(['GarageQual', 'GarageCond'])
+# formatting.remove_outliers(['LotFrontage', 'LotArea'])
+# formatting.log_skew_data(columns=num_cols)
