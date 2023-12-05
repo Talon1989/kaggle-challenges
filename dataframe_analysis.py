@@ -149,15 +149,17 @@ class DataFormatting(DataAnalysis):
     def __init__(self, df: pd.DataFrame, target_feature: str=None):
         super().__init__(df, target_feature)
 
-    def remove_nans(self, columns):
+    def remove_nans(self, columns, reset_indices=True):
         if isinstance(columns, str):
             not_nan_indices = self.df[self.df[columns].notna()].index
             self.df = self.df.iloc[not_nan_indices, :]
         else:
             not_nan_indices = self.df[self.df[columns].notna().all(axis=1)].index
             self.df = self.df.iloc[not_nan_indices, :]
+        if reset_indices:
+            self.df.reset_index(drop=True, inplace=True)
 
-    def return_remove_nans(self, columns):
+    def return_remove_nans(self, columns, reset_indices=True):
         # if isinstance(columns, str):
         #     columns = [columns]
         # for c in columns:
@@ -168,6 +170,8 @@ class DataFormatting(DataAnalysis):
         else:
             not_nan_indices = self.df[self.df[columns].notna().all(axis=1)].index
             self.df = self.df.iloc[not_nan_indices, :]
+        if reset_indices:
+            self.df.reset_index(drop=True, inplace=True)
         return self.df
 
     def change_nans(self, columns, value):
@@ -183,10 +187,11 @@ class DataFormatting(DataAnalysis):
             # self.df.loc[nan_indices, c] = value
             self.df[c].fillna(value, inplace=True)
 
-    def remove_outliers(self, columns, threshold=5.):
+    def remove_outliers(self, columns, threshold=5.,  reset_indices=True):
         """
         :param columns: features to be included in the operation (need to be numerical) and containing no nan
         :param threshold: number of stds from the mean to be considered an outlier
+        :param reset_indices: reset_indices
         """
         if isinstance(columns, str):
             z_scores = zscore(self.df[columns])
@@ -194,11 +199,14 @@ class DataFormatting(DataAnalysis):
         else:
             z_scores = zscore(self.df[columns])
             self.df = self.df.loc[(np.abs(z_scores) < threshold).all(axis=1), :]
+        if reset_indices:
+            self.df.reset_index(drop=True, inplace=True)
 
-    def return_remove_outliers(self, columns, threshold=5.):
+    def return_remove_outliers(self, columns, threshold=5., reset_indices=True):
         """
         :param columns: features to be included in the operation (need to be numerical) and containing no nan
         :param threshold: number of stds from the mean to be considered an outlier
+        :param reset_indices: reset_indices
         """
         if isinstance(columns, str):
             z_scores = zscore(self.df[columns])
@@ -206,6 +214,8 @@ class DataFormatting(DataAnalysis):
         else:
             z_scores = zscore(self.df[columns])
             self.df = self.df.loc[(np.abs(z_scores) < threshold).all(axis=1), :]
+        if reset_indices:
+            self.df.reset_index(drop=True, inplace=True)
         return self.df
 
     def one_hot_columns(self, columns):
@@ -238,8 +248,12 @@ nan_cols = ['Alley', 'MasVnrType']
 formatting = DataFormatting(dataframe, 'SalePrice')
 # formatting.change_nans(['LotFrontage', 'LotArea'], 0.)
 # formatting.remove_nans('LotFrontage')
+
 dataframe = formatting.return_remove_nans('LotFrontage')
 dataframe = formatting.return_remove_outliers('LotFrontage')
 dataframe = formatting.return_one_hot_columns(['GarageQual', 'GarageCond'])
+
 # formatting.remove_outliers(['LotFrontage', 'LotArea'])
 # formatting.log_skew_data(columns=num_cols)
+
+# dataframe = formatting.return_remove_nans(['LotArea'])
